@@ -10,6 +10,15 @@ public sealed class MainForm : Form
 {
     private const string ImageFileName = "ayumu-kasuga.jpg";
 
+    private enum ImageViewMode
+    {
+        Original,
+        Grayscale,
+        Smoothed
+    }
+
+    private ImageViewMode _currentMode = ImageViewMode.Original;
+
     private readonly ImageService _imageService = new();
     private readonly HistogramService _histogramService = new();
     private readonly DistanceService _distanceService = new();
@@ -22,9 +31,11 @@ public sealed class MainForm : Form
     private readonly Label _manhattanLabel = new();
     private readonly Label _minkowskiLabel = new();
     private readonly Label _statusLabel = new();
+    private readonly Button _smoothingButton = new() { Text = "Smoothing", AutoSize = true, Enabled = false };
 
     private Bitmap? _originalImage;
     private Bitmap? _grayscaleImage;
+    private Bitmap? _smoothedImage;
     private PixelPoint? _pointA;
     private PixelPoint? _pointB;
 
@@ -42,10 +53,13 @@ public sealed class MainForm : Form
 
     private void BuildLayout()
     {
+        var openImageButton = new Button { Text = "Open Image", AutoSize = true };
+        openImageButton.Click += (_, _) => OpenImage();
         var originalButton = new Button { Text = "Original", AutoSize = true };
         originalButton.Click += (_, _) => ShowOriginal();
         var grayscaleButton = new Button { Text = "Grayscale", AutoSize = true };
         grayscaleButton.Click += (_, _) => ShowGrayscale();
+        _smoothingButton.Click += (_, _) => ShowSmoothed();
         var clearPointsButton = new Button { Text = "Clear Points", AutoSize = true };
         clearPointsButton.Click += (_, _) => ClearPoints();
 
@@ -56,7 +70,7 @@ public sealed class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             Padding = new Padding(0, 0, 0, 4)
         };
-        actions.Controls.AddRange([originalButton, grayscaleButton, clearPointsButton]);
+        actions.Controls.AddRange([openImageButton, originalButton, grayscaleButton, _smoothingButton, clearPointsButton]);
 
         _imageBox.Dock = DockStyle.Fill;
         _imageBox.BackColor = Color.FromArgb(245, 245, 245);
@@ -188,8 +202,7 @@ public sealed class MainForm : Form
         var imagePath = Path.Combine(AppContext.BaseDirectory, "Images", ImageFileName);
         try
         {
-            _originalImage = _imageService.LoadImage(imagePath);
-            _imageBox.Image = _originalImage;
+            LoadOriginalImage(imagePath);
             _statusLabel.Text = $"Loaded: Images{Path.DirectorySeparatorChar}{ImageFileName}";
         }
         catch (FileNotFoundException)
@@ -210,6 +223,7 @@ public sealed class MainForm : Form
         }
 
         _imageBox.Image = _originalImage;
+        SetViewMode(ImageViewMode.Original);
         _histogramPanel.Clear();
         _statusLabel.Text = "Showing the original image.";
         _imageBox.Invalidate();
@@ -222,15 +236,119 @@ public sealed class MainForm : Form
             return;
         }
 
-        var newGrayscale = _imageService.ConvertToGrayscale(_originalImage);
-        var oldGrayscale = _grayscaleImage;
-        _grayscaleImage = newGrayscale;
-        _imageBox.Image = _grayscaleImage;
-        oldGrayscale?.Dispose();
+        Bitmap? newGrayscale = null;
+        try
+        {
+            newGrayscale = _imageService.ConvertToGrayscale(_originalImage);
+            var histogram = _histogramService.CreateHistogram(newGrayscale);
 
-        _histogramPanel.Display(_histogramService.CreateHistogram(_grayscaleImage));
-        _statusLabel.Text = "Showing linear-light grayscale and its histogram.";
-        _imageBox.Invalidate();
+            _imageBox.Image = _originalImage;
+            DisposeProcessedImages();
+            _grayscaleImage = newGrayscale;
+            newGrayscale = null;
+            _imageBox.Image = _grayscaleImage;
+            SetViewMode(ImageViewMode.Grayscale);
+            _histogramPanel.Display(histogram);
+            _statusLabel.Text = "Showing linear-light grayscale and its histogram.";
+            _imageBox.Invalidate();
+        }
+        catch (Exception exception)
+        {
+            _statusLabel.Text = $"Unable to generate grayscale: {exception.Message}";
+        }
+        finally
+        {
+            newGrayscale?.Dispose();
+        }
+    }
+
+    private void OpenImage()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Open Image",
+            Filter = "Image files (*.jpg;*.jpeg;*.png;*.bmp)|*.jpg;*.jpeg;*.png;*.bmp",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        try
+        {
+            LoadOriginalImage(dialog.FileName);
+            _statusLabel.Text = $"Loaded: {Path.GetFileName(dialog.FileName)}";
+        }
+        catch (Exception exception)
+        {
+            _statusLabel.Text = $"Unable to load {Path.GetFileName(dialog.FileName)}: {exception.Message}";
+        }
+    }
+
+    private void LoadOriginalImage(string path)
+    {
+        var newOriginal = _imageService.LoadImage(path);
+
+        // Detach the displayed bitmap before disposing any images owned by the form.
+        _imageBox.Image = null;
+        DisposeProcessedImages();
+        _originalImage?.Dispose();
+        _originalImage = newOriginal;
+        _imageBox.Image = _originalImage;
+        SetViewMode(ImageViewMode.Original);
+        _histogramPanel.Clear();
+        ClearPoints();
+    }
+
+    private void ShowSmoothed()
+    {
+        if (_currentMode != ImageViewMode.Grayscale || _grayscaleImage is null)
+        {
+            return;
+        }
+
+        Bitmap? newSmoothed = null;
+        try
+        {
+            newSmoothed = _imageService.ApplySmoothing(_grayscaleImage);
+            var histogram = _histogramService.CreateHistogram(newSmoothed);
+
+            _imageBox.Image = _grayscaleImage;
+            _smoothedImage?.Dispose();
+            _smoothedImage = newSmoothed;
+            newSmoothed = null;
+            _imageBox.Image = _smoothedImage;
+            SetViewMode(ImageViewMode.Smoothed);
+            _histogramPanel.Display(histogram);
+            _statusLabel.Text = "Showing smoothed grayscale image and its histogram.";
+            _imageBox.Invalidate();
+        }
+        catch (Exception exception)
+        {
+            _statusLabel.Text = $"Unable to smooth the image: {exception.Message}";
+        }
+        finally
+        {
+            newSmoothed?.Dispose();
+        }
+    }
+
+    private void SetViewMode(ImageViewMode mode)
+    {
+        _currentMode = mode;
+        _smoothingButton.Enabled = mode == ImageViewMode.Grayscale;
+    }
+
+    private void DisposeProcessedImages()
+    {
+        // Callers must detach these bitmaps from PictureBox.Image first.
+        _smoothedImage?.Dispose();
+        _smoothedImage = null;
+        _grayscaleImage?.Dispose();
+        _grayscaleImage = null;
     }
 
     private void OnImageMouseClick(object? sender, MouseEventArgs e)
@@ -357,7 +475,8 @@ public sealed class MainForm : Form
     {
         // PictureBox does not own these bitmaps; this form is responsible for their disposal.
         _imageBox.Image = null;
-        _grayscaleImage?.Dispose();
+        DisposeProcessedImages();
         _originalImage?.Dispose();
+        _originalImage = null;
     }
 }

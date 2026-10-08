@@ -6,6 +6,7 @@ namespace ImageProcessingLab.Application.Services;
 public sealed class ImageService
 {
     private readonly LinearGrayscaleProcessor _grayscaleProcessor = new();
+    private readonly SmoothingProcessor _smoothingProcessor = new();
 
     public Bitmap LoadImage(string path)
     {
@@ -20,4 +21,6 @@ public sealed class ImageService
     }
 
     public Bitmap ConvertToGrayscale(Bitmap source) => _grayscaleProcessor.Process(source);
+
+    public Bitmap ApplySmoothing(Bitmap source) => _smoothingProcessor.Process(source);
 }
