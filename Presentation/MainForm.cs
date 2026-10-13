@@ -1,4 +1,4 @@
-using System.Drawing;
+    using System.Drawing;
 using System.Globalization;
 using ImageProcessingLab.Application.Services;
 using ImageProcessingLab.Domain.Models;
@@ -305,30 +305,64 @@ public sealed class MainForm : Form
 
     private void ShowSmoothed()
     {
-        if (_currentMode != ImageViewMode.Grayscale || _grayscaleImage is null)
+        Bitmap? source = _currentMode switch
+        {
+            ImageViewMode.Original => _originalImage,
+            ImageViewMode.Grayscale => _grayscaleImage,
+            _ => null
+        };
+
+        if (source is null)
         {
             return;
         }
 
+        var isGrayscale =
+            _currentMode == ImageViewMode.Grayscale;
+
         Bitmap? newSmoothed = null;
+
         try
         {
-            newSmoothed = _imageService.ApplySmoothing(_grayscaleImage);
-            var histogram = _histogramService.CreateHistogram(newSmoothed);
+            newSmoothed = _imageService.ApplySmoothing(source);
 
-            _imageBox.Image = _grayscaleImage;
+            // Evita que PictureBox siga apuntando a una imagen
+            // que pudiera ser reemplazada.
+            _imageBox.Image = source;
+
             _smoothedImage?.Dispose();
+
             _smoothedImage = newSmoothed;
             newSmoothed = null;
+
             _imageBox.Image = _smoothedImage;
+
             SetViewMode(ImageViewMode.Smoothed);
-            _histogramPanel.Display(histogram);
-            _statusLabel.Text = "Showing smoothed grayscale image and its histogram.";
+
+            if (isGrayscale)
+            {
+                var histogram =
+                    _histogramService.CreateHistogram(_smoothedImage);
+
+                _histogramPanel.Display(histogram);
+
+                _statusLabel.Text =
+                    "Showing smoothed grayscale image and its histogram.";
+            }
+            else
+            {
+                _histogramPanel.Clear();
+
+                _statusLabel.Text =
+                    "Showing smoothed color image.";
+            }
+
             _imageBox.Invalidate();
         }
         catch (Exception exception)
         {
-            _statusLabel.Text = $"Unable to smooth the image: {exception.Message}";
+            _statusLabel.Text =
+                $"Unable to smooth the image: {exception.Message}";
         }
         finally
         {
@@ -339,7 +373,11 @@ public sealed class MainForm : Form
     private void SetViewMode(ImageViewMode mode)
     {
         _currentMode = mode;
-        _smoothingButton.Enabled = mode == ImageViewMode.Grayscale;
+
+        _smoothingButton.Enabled =
+            _originalImage is not null &&
+            mode is ImageViewMode.Original
+                 or ImageViewMode.Grayscale;
     }
 
     private void DisposeProcessedImages()
