@@ -12,4 +12,6 @@ public sealed class DistanceService
     public int CalculateManhattan(PixelPoint first, PixelPoint second) => _calculator.Manhattan(first, second);
 
     public double CalculateMinkowski(PixelPoint first, PixelPoint second) => _calculator.Minkowski(first, second, p: 3);
+
+    public int CalculateChessboard(PixelPoint first, PixelPoint second) => _calculator.Chessboard(first, second);
 }

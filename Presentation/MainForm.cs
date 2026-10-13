@@ -30,6 +30,7 @@ public sealed class MainForm : Form
     private readonly Label _euclideanLabel = new();
     private readonly Label _manhattanLabel = new();
     private readonly Label _minkowskiLabel = new();
+    private readonly Label _chessboardLabel = new();
     private readonly Label _statusLabel = new();
     private readonly Button _smoothingButton = new() { Text = "Smoothing", AutoSize = true, Enabled = false };
 
@@ -129,16 +130,19 @@ public sealed class MainForm : Form
         pointDetails.Controls.Add(_pointALabel, 0, 1);
         pointDetails.Controls.Add(_pointBLabel, 1, 1);
 
-        var distanceDetails = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 3 };
-        distanceDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
-        distanceDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
-        distanceDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.34f));
+        var distanceDetails = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 4 };
+        distanceDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        distanceDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        distanceDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        distanceDetails.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
         ConfigureMeasurementLabel(_euclideanLabel, "Euclidean: --");
         ConfigureMeasurementLabel(_manhattanLabel, "Manhattan: --");
         ConfigureMeasurementLabel(_minkowskiLabel, "Minkowski (p = 3): --");
+        ConfigureMeasurementLabel(_chessboardLabel, "Chessboard: --");
         distanceDetails.Controls.Add(_euclideanLabel, 0, 0);
         distanceDetails.Controls.Add(_manhattanLabel, 1, 0);
         distanceDetails.Controls.Add(_minkowskiLabel, 2, 0);
+        distanceDetails.Controls.Add(_chessboardLabel, 3, 0);
 
         _statusLabel.AutoSize = true;
         _statusLabel.Dock = DockStyle.Fill;
@@ -455,6 +459,7 @@ public sealed class MainForm : Form
         _euclideanLabel.Text = $"Euclidean: {_distanceService.CalculateEuclidean(first, second).ToString("F2", CultureInfo.InvariantCulture)} px";
         _manhattanLabel.Text = $"Manhattan: {_distanceService.CalculateManhattan(first, second)} px";
         _minkowskiLabel.Text = $"Minkowski (p = 3): {_distanceService.CalculateMinkowski(first, second).ToString("F2", CultureInfo.InvariantCulture)} px";
+        _chessboardLabel.Text = $"Chessboard: {_distanceService.CalculateChessboard(first, second)} px";
     }
 
     private void ClearPoints()
@@ -466,6 +471,7 @@ public sealed class MainForm : Form
         _euclideanLabel.Text = "Euclidean: --";
         _manhattanLabel.Text = "Manhattan: --";
         _minkowskiLabel.Text = "Minkowski (p = 3): --";
+        _chessboardLabel.Text = "Chessboard: --";
         _statusLabel.Text = "Points cleared.";
         _imageBox.Invalidate();
     }

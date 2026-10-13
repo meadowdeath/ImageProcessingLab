@@ -27,6 +27,12 @@ public sealed class DistanceCalculator
         return Math.Pow(Math.Pow(deltaX, p) + Math.Pow(deltaY, p), 1.0 / p);
     }
 
+    public int Chessboard(PixelPoint first, PixelPoint second)
+    {
+        var (deltaX, deltaY) = GetDeltas(first, second);
+        return Math.Max(deltaX, deltaY);
+    }
+
     private static (int DeltaX, int DeltaY) GetDeltas(PixelPoint first, PixelPoint second) =>
         (Math.Abs(second.X - first.X), Math.Abs(second.Y - first.Y));
 }
