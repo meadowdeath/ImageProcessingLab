@@ -7,6 +7,7 @@ public sealed class ImageService
 {
     private readonly LinearGrayscaleProcessor _grayscaleProcessor = new();
     private readonly BoxFilterProcessor _boxFilterProcessor = new();
+    private readonly GaussianFilterProcessor _gaussianFilterProcessor = new();
 
     public Bitmap LoadImage(string path)
     {
@@ -23,4 +24,6 @@ public sealed class ImageService
     public Bitmap ConvertToGrayscale(Bitmap source) => _grayscaleProcessor.Process(source);
 
     public Bitmap ApplyBoxFilter(Bitmap source) => _boxFilterProcessor.Process(source);
+
+    public Bitmap ApplyGaussianFilter(Bitmap source) => _gaussianFilterProcessor.Process(source);
 }

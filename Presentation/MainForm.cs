@@ -14,7 +14,8 @@ public sealed class MainForm : Form
     {
         Original,
         Grayscale,
-        BoxFiltered
+        BoxFiltered,
+        GaussianFiltered
     }
 
     private ImageViewMode _currentMode = ImageViewMode.Original;
@@ -33,10 +34,12 @@ public sealed class MainForm : Form
     private readonly Label _chessboardLabel = new();
     private readonly Label _statusLabel = new();
     private readonly Button _boxFilterButton = new() { Text = "Box Filter", AutoSize = true, Enabled = false };
+    private readonly Button _gaussianFilterButton = new() { Text = "Gaussian Filter", AutoSize = true, Enabled = false };
 
     private Bitmap? _originalImage;
     private Bitmap? _grayscaleImage;
     private Bitmap? _boxFilteredImage;
+    private Bitmap? _gaussianFilteredImage;
     private PixelPoint? _pointA;
     private PixelPoint? _pointB;
 
@@ -61,6 +64,7 @@ public sealed class MainForm : Form
         var grayscaleButton = new Button { Text = "Grayscale", AutoSize = true };
         grayscaleButton.Click += (_, _) => ShowGrayscale();
         _boxFilterButton.Click += (_, _) => ShowBoxFiltered();
+        _gaussianFilterButton.Click += (_, _) => ShowGaussianFiltered();
         var clearPointsButton = new Button { Text = "Clear Points", AutoSize = true };
         clearPointsButton.Click += (_, _) => ClearPoints();
 
@@ -71,7 +75,7 @@ public sealed class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             Padding = new Padding(0, 0, 0, 4)
         };
-        actions.Controls.AddRange([openImageButton, originalButton, grayscaleButton, _boxFilterButton, clearPointsButton]);
+        actions.Controls.AddRange([openImageButton, originalButton, grayscaleButton, _boxFilterButton, _gaussianFilterButton, clearPointsButton]);
 
         _imageBox.Dock = DockStyle.Fill;
         _imageBox.BackColor = Color.FromArgb(245, 245, 245);
@@ -307,7 +311,11 @@ public sealed class MainForm : Form
         ClearPoints();
     }
 
-    private void ShowBoxFiltered()
+    private void ShowBoxFiltered() => ShowFiltered(ImageViewMode.BoxFiltered);
+
+    private void ShowGaussianFiltered() => ShowFiltered(ImageViewMode.GaussianFiltered);
+
+    private void ShowFiltered(ImageViewMode mode)
     {
         Bitmap? source = _currentMode switch
         {
@@ -324,41 +332,49 @@ public sealed class MainForm : Form
         var isGrayscale =
             _currentMode == ImageViewMode.Grayscale;
 
-        Bitmap? newBoxFiltered = null;
+        var filterName = mode == ImageViewMode.BoxFiltered ? "Box" : "Gaussian";
+        var filteredDescription = mode == ImageViewMode.BoxFiltered ? "box-filtered" : "Gaussian-filtered";
+        Bitmap? newFiltered = null;
 
         try
         {
-            newBoxFiltered = _imageService.ApplyBoxFilter(source);
+            newFiltered = mode == ImageViewMode.BoxFiltered
+                ? _imageService.ApplyBoxFilter(source)
+                : _imageService.ApplyGaussianFilter(source);
+            var histogram = isGrayscale ? _histogramService.CreateHistogram(newFiltered) : null;
 
             // Evita que PictureBox siga apuntando a una imagen
             // que pudiera ser reemplazada.
             _imageBox.Image = source;
 
-            _boxFilteredImage?.Dispose();
-
-            _boxFilteredImage = newBoxFiltered;
-            newBoxFiltered = null;
-
-            _imageBox.Image = _boxFilteredImage;
-
-            SetViewMode(ImageViewMode.BoxFiltered);
-
-            if (isGrayscale)
+            if (mode == ImageViewMode.BoxFiltered)
             {
-                var histogram =
-                    _histogramService.CreateHistogram(_boxFilteredImage);
+                _boxFilteredImage?.Dispose();
+                _boxFilteredImage = newFiltered;
+            }
+            else
+            {
+                _gaussianFilteredImage?.Dispose();
+                _gaussianFilteredImage = newFiltered;
+            }
 
+            _imageBox.Image = newFiltered;
+            newFiltered = null;
+            SetViewMode(mode);
+
+            if (histogram is not null)
+            {
                 _histogramPanel.Display(histogram);
 
                 _statusLabel.Text =
-                    "Showing box-filtered grayscale image and its histogram.";
+                    $"Showing {filteredDescription} grayscale image and its histogram.";
             }
             else
             {
                 _histogramPanel.Clear();
 
                 _statusLabel.Text =
-                    "Showing box-filtered color image.";
+                    $"Showing {filteredDescription} color image.";
             }
 
             _imageBox.Invalidate();
@@ -366,11 +382,11 @@ public sealed class MainForm : Form
         catch (Exception exception)
         {
             _statusLabel.Text =
-                $"Unable to apply the Box filter: {exception.Message}";
+                $"Unable to apply the {filterName} filter: {exception.Message}";
         }
         finally
         {
-            newBoxFiltered?.Dispose();
+            newFiltered?.Dispose();
         }
     }
 
@@ -382,11 +398,14 @@ public sealed class MainForm : Form
             _originalImage is not null &&
             mode is ImageViewMode.Original
                  or ImageViewMode.Grayscale;
+        _gaussianFilterButton.Enabled = _boxFilterButton.Enabled;
     }
 
     private void DisposeProcessedImages()
     {
         // Callers must detach these bitmaps from PictureBox.Image first.
+        _gaussianFilteredImage?.Dispose();
+        _gaussianFilteredImage = null;
         _boxFilteredImage?.Dispose();
         _boxFilteredImage = null;
         _grayscaleImage?.Dispose();
