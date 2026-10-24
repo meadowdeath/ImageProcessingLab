@@ -14,7 +14,7 @@ public sealed class MainForm : Form
     {
         Original,
         Grayscale,
-        Smoothed
+        BoxFiltered
     }
 
     private ImageViewMode _currentMode = ImageViewMode.Original;
@@ -32,11 +32,11 @@ public sealed class MainForm : Form
     private readonly Label _minkowskiLabel = new();
     private readonly Label _chessboardLabel = new();
     private readonly Label _statusLabel = new();
-    private readonly Button _smoothingButton = new() { Text = "Smoothing", AutoSize = true, Enabled = false };
+    private readonly Button _boxFilterButton = new() { Text = "Box Filter", AutoSize = true, Enabled = false };
 
     private Bitmap? _originalImage;
     private Bitmap? _grayscaleImage;
-    private Bitmap? _smoothedImage;
+    private Bitmap? _boxFilteredImage;
     private PixelPoint? _pointA;
     private PixelPoint? _pointB;
 
@@ -60,7 +60,7 @@ public sealed class MainForm : Form
         originalButton.Click += (_, _) => ShowOriginal();
         var grayscaleButton = new Button { Text = "Grayscale", AutoSize = true };
         grayscaleButton.Click += (_, _) => ShowGrayscale();
-        _smoothingButton.Click += (_, _) => ShowSmoothed();
+        _boxFilterButton.Click += (_, _) => ShowBoxFiltered();
         var clearPointsButton = new Button { Text = "Clear Points", AutoSize = true };
         clearPointsButton.Click += (_, _) => ClearPoints();
 
@@ -71,7 +71,7 @@ public sealed class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             Padding = new Padding(0, 0, 0, 4)
         };
-        actions.Controls.AddRange([openImageButton, originalButton, grayscaleButton, _smoothingButton, clearPointsButton]);
+        actions.Controls.AddRange([openImageButton, originalButton, grayscaleButton, _boxFilterButton, clearPointsButton]);
 
         _imageBox.Dock = DockStyle.Fill;
         _imageBox.BackColor = Color.FromArgb(245, 245, 245);
@@ -307,7 +307,7 @@ public sealed class MainForm : Form
         ClearPoints();
     }
 
-    private void ShowSmoothed()
+    private void ShowBoxFiltered()
     {
         Bitmap? source = _currentMode switch
         {
@@ -324,41 +324,41 @@ public sealed class MainForm : Form
         var isGrayscale =
             _currentMode == ImageViewMode.Grayscale;
 
-        Bitmap? newSmoothed = null;
+        Bitmap? newBoxFiltered = null;
 
         try
         {
-            newSmoothed = _imageService.ApplySmoothing(source);
+            newBoxFiltered = _imageService.ApplyBoxFilter(source);
 
             // Evita que PictureBox siga apuntando a una imagen
             // que pudiera ser reemplazada.
             _imageBox.Image = source;
 
-            _smoothedImage?.Dispose();
+            _boxFilteredImage?.Dispose();
 
-            _smoothedImage = newSmoothed;
-            newSmoothed = null;
+            _boxFilteredImage = newBoxFiltered;
+            newBoxFiltered = null;
 
-            _imageBox.Image = _smoothedImage;
+            _imageBox.Image = _boxFilteredImage;
 
-            SetViewMode(ImageViewMode.Smoothed);
+            SetViewMode(ImageViewMode.BoxFiltered);
 
             if (isGrayscale)
             {
                 var histogram =
-                    _histogramService.CreateHistogram(_smoothedImage);
+                    _histogramService.CreateHistogram(_boxFilteredImage);
 
                 _histogramPanel.Display(histogram);
 
                 _statusLabel.Text =
-                    "Showing smoothed grayscale image and its histogram.";
+                    "Showing box-filtered grayscale image and its histogram.";
             }
             else
             {
                 _histogramPanel.Clear();
 
                 _statusLabel.Text =
-                    "Showing smoothed color image.";
+                    "Showing box-filtered color image.";
             }
 
             _imageBox.Invalidate();
@@ -366,11 +366,11 @@ public sealed class MainForm : Form
         catch (Exception exception)
         {
             _statusLabel.Text =
-                $"Unable to smooth the image: {exception.Message}";
+                $"Unable to apply the Box filter: {exception.Message}";
         }
         finally
         {
-            newSmoothed?.Dispose();
+            newBoxFiltered?.Dispose();
         }
     }
 
@@ -378,7 +378,7 @@ public sealed class MainForm : Form
     {
         _currentMode = mode;
 
-        _smoothingButton.Enabled =
+        _boxFilterButton.Enabled =
             _originalImage is not null &&
             mode is ImageViewMode.Original
                  or ImageViewMode.Grayscale;
@@ -387,8 +387,8 @@ public sealed class MainForm : Form
     private void DisposeProcessedImages()
     {
         // Callers must detach these bitmaps from PictureBox.Image first.
-        _smoothedImage?.Dispose();
-        _smoothedImage = null;
+        _boxFilteredImage?.Dispose();
+        _boxFilteredImage = null;
         _grayscaleImage?.Dispose();
         _grayscaleImage = null;
     }

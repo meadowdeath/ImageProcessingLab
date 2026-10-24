@@ -3,7 +3,7 @@ using System.Drawing.Imaging;
 
 namespace ImageProcessingLab.Domain.Processing;
 
-public sealed class SmoothingProcessor
+public sealed class BoxFilterProcessor
 {
     public Bitmap Process(Bitmap source)
     {
