@@ -15,10 +15,12 @@ public sealed class MainForm : Form
         Original,
         Grayscale,
         BoxFiltered,
-        GaussianFiltered
+        GaussianFiltered,
+        LaplaceFiltered
     }
 
     private ImageViewMode _currentMode = ImageViewMode.Original;
+    private bool _currentImageIsGrayscale;
 
     private readonly ImageService _imageService = new();
     private readonly HistogramService _histogramService = new();
@@ -35,11 +37,13 @@ public sealed class MainForm : Form
     private readonly Label _statusLabel = new();
     private readonly Button _boxFilterButton = new() { Text = "Box Filter", AutoSize = true, Enabled = false };
     private readonly Button _gaussianFilterButton = new() { Text = "Gaussian Filter", AutoSize = true, Enabled = false };
+    private readonly Button _laplaceFilterButton = new() { Text = "Laplace Filter", AutoSize = true, Enabled = false };
 
     private Bitmap? _originalImage;
     private Bitmap? _grayscaleImage;
     private Bitmap? _boxFilteredImage;
     private Bitmap? _gaussianFilteredImage;
+    private Bitmap? _laplaceFilteredImage;
     private PixelPoint? _pointA;
     private PixelPoint? _pointB;
 
@@ -65,6 +69,7 @@ public sealed class MainForm : Form
         grayscaleButton.Click += (_, _) => ShowGrayscale();
         _boxFilterButton.Click += (_, _) => ShowBoxFiltered();
         _gaussianFilterButton.Click += (_, _) => ShowGaussianFiltered();
+        _laplaceFilterButton.Click += (_, _) => ShowLaplaceFiltered();
         var clearPointsButton = new Button { Text = "Clear Points", AutoSize = true };
         clearPointsButton.Click += (_, _) => ClearPoints();
 
@@ -75,7 +80,7 @@ public sealed class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             Padding = new Padding(0, 0, 0, 4)
         };
-        actions.Controls.AddRange([openImageButton, originalButton, grayscaleButton, _boxFilterButton, _gaussianFilterButton, clearPointsButton]);
+        actions.Controls.AddRange([openImageButton, originalButton, grayscaleButton, _boxFilterButton, _gaussianFilterButton, _laplaceFilterButton, clearPointsButton]);
 
         _imageBox.Dock = DockStyle.Fill;
         _imageBox.BackColor = Color.FromArgb(245, 245, 245);
@@ -231,7 +236,7 @@ public sealed class MainForm : Form
         }
 
         _imageBox.Image = _originalImage;
-        SetViewMode(ImageViewMode.Original);
+        SetViewMode(ImageViewMode.Original, isGrayscale: false);
         _histogramPanel.Clear();
         _statusLabel.Text = "Showing the original image.";
         _imageBox.Invalidate();
@@ -255,7 +260,7 @@ public sealed class MainForm : Form
             _grayscaleImage = newGrayscale;
             newGrayscale = null;
             _imageBox.Image = _grayscaleImage;
-            SetViewMode(ImageViewMode.Grayscale);
+            SetViewMode(ImageViewMode.Grayscale, isGrayscale: true);
             _histogramPanel.Display(histogram);
             _statusLabel.Text = "Showing linear-light grayscale and its histogram.";
             _imageBox.Invalidate();
@@ -306,7 +311,7 @@ public sealed class MainForm : Form
         _originalImage?.Dispose();
         _originalImage = newOriginal;
         _imageBox.Image = _originalImage;
-        SetViewMode(ImageViewMode.Original);
+        SetViewMode(ImageViewMode.Original, isGrayscale: false);
         _histogramPanel.Clear();
         ClearPoints();
     }
@@ -360,7 +365,7 @@ public sealed class MainForm : Form
 
             _imageBox.Image = newFiltered;
             newFiltered = null;
-            SetViewMode(mode);
+            SetViewMode(mode, isGrayscale);
 
             if (histogram is not null)
             {
@@ -390,20 +395,71 @@ public sealed class MainForm : Form
         }
     }
 
-    private void SetViewMode(ImageViewMode mode)
+    private void ShowLaplaceFiltered()
+    {
+        Bitmap? source = _currentMode switch
+        {
+            ImageViewMode.Original => _originalImage,
+            ImageViewMode.Grayscale => _grayscaleImage,
+            ImageViewMode.BoxFiltered => _boxFilteredImage,
+            ImageViewMode.GaussianFiltered => _gaussianFilteredImage,
+            _ => null
+        };
+
+        if (source is null)
+        {
+            return;
+        }
+
+        Bitmap? newLaplaceFiltered = null;
+        try
+        {
+            newLaplaceFiltered = _imageService.ApplyLaplaceFilter(source, _currentImageIsGrayscale);
+            var histogram = _histogramService.CreateHistogram(newLaplaceFiltered);
+
+            _imageBox.Image = source;
+            _laplaceFilteredImage?.Dispose();
+            _laplaceFilteredImage = newLaplaceFiltered;
+            newLaplaceFiltered = null;
+            _imageBox.Image = _laplaceFilteredImage;
+            SetViewMode(ImageViewMode.LaplaceFiltered, isGrayscale: true);
+            _histogramPanel.Display(histogram);
+            _statusLabel.Text = "Showing Laplace edge image and its histogram.";
+            _imageBox.Invalidate();
+        }
+        catch (Exception exception)
+        {
+            _statusLabel.Text = $"Unable to apply the Laplace filter: {exception.Message}";
+        }
+        finally
+        {
+            newLaplaceFiltered?.Dispose();
+        }
+    }
+
+    private void SetViewMode(ImageViewMode mode, bool isGrayscale)
     {
         _currentMode = mode;
+        _currentImageIsGrayscale = isGrayscale;
 
         _boxFilterButton.Enabled =
             _originalImage is not null &&
             mode is ImageViewMode.Original
                  or ImageViewMode.Grayscale;
         _gaussianFilterButton.Enabled = _boxFilterButton.Enabled;
+        _laplaceFilterButton.Enabled =
+            _imageBox.Image is not null &&
+            mode is ImageViewMode.Original
+                 or ImageViewMode.Grayscale
+                 or ImageViewMode.BoxFiltered
+                 or ImageViewMode.GaussianFiltered;
     }
 
     private void DisposeProcessedImages()
     {
         // Callers must detach these bitmaps from PictureBox.Image first.
+        _laplaceFilteredImage?.Dispose();
+        _laplaceFilteredImage = null;
         _gaussianFilteredImage?.Dispose();
         _gaussianFilteredImage = null;
         _boxFilteredImage?.Dispose();
