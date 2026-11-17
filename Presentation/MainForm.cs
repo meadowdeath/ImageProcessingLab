@@ -16,7 +16,8 @@ public sealed class MainForm : Form
         Grayscale,
         BoxFiltered,
         GaussianFiltered,
-        LaplaceFiltered
+        LaplaceFiltered,
+        CannyFiltered
     }
 
     private ImageViewMode _currentMode = ImageViewMode.Original;
@@ -38,12 +39,14 @@ public sealed class MainForm : Form
     private readonly Button _boxFilterButton = new() { Text = "Box Filter", AutoSize = true, Enabled = false };
     private readonly Button _gaussianFilterButton = new() { Text = "Gaussian Filter", AutoSize = true, Enabled = false };
     private readonly Button _laplaceFilterButton = new() { Text = "Laplace Filter", AutoSize = true, Enabled = false };
+    private readonly Button _cannyFilterButton = new() { Text = "Canny Filter", AutoSize = true, Enabled = false };
 
     private Bitmap? _originalImage;
     private Bitmap? _grayscaleImage;
     private Bitmap? _boxFilteredImage;
     private Bitmap? _gaussianFilteredImage;
     private Bitmap? _laplaceFilteredImage;
+    private Bitmap? _cannyFilteredImage;
     private PixelPoint? _pointA;
     private PixelPoint? _pointB;
 
@@ -70,6 +73,7 @@ public sealed class MainForm : Form
         _boxFilterButton.Click += (_, _) => ShowBoxFiltered();
         _gaussianFilterButton.Click += (_, _) => ShowGaussianFiltered();
         _laplaceFilterButton.Click += (_, _) => ShowLaplaceFiltered();
+        _cannyFilterButton.Click += (_, _) => ShowCannyFiltered();
         var clearPointsButton = new Button { Text = "Clear Points", AutoSize = true };
         clearPointsButton.Click += (_, _) => ClearPoints();
 
@@ -80,7 +84,7 @@ public sealed class MainForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             Padding = new Padding(0, 0, 0, 4)
         };
-        actions.Controls.AddRange([openImageButton, originalButton, grayscaleButton, _boxFilterButton, _gaussianFilterButton, _laplaceFilterButton, clearPointsButton]);
+        actions.Controls.AddRange([openImageButton, originalButton, grayscaleButton, _boxFilterButton, _gaussianFilterButton, _laplaceFilterButton, _cannyFilterButton, clearPointsButton]);
 
         _imageBox.Dock = DockStyle.Fill;
         _imageBox.BackColor = Color.FromArgb(245, 245, 245);
@@ -437,6 +441,46 @@ public sealed class MainForm : Form
         }
     }
 
+    private void ShowCannyFiltered()
+    {
+        Bitmap? source = _currentMode switch
+        {
+            ImageViewMode.Original => _originalImage,
+            ImageViewMode.Grayscale => _grayscaleImage,
+            _ => null
+        };
+
+        if (source is null)
+        {
+            return;
+        }
+
+        Bitmap? newCannyFiltered = null;
+        try
+        {
+            newCannyFiltered = _imageService.ApplyCannyFilter(source, _currentImageIsGrayscale);
+            var histogram = _histogramService.CreateHistogram(newCannyFiltered);
+
+            _imageBox.Image = source;
+            _cannyFilteredImage?.Dispose();
+            _cannyFilteredImage = newCannyFiltered;
+            newCannyFiltered = null;
+            _imageBox.Image = _cannyFilteredImage;
+            SetViewMode(ImageViewMode.CannyFiltered, isGrayscale: true);
+            _histogramPanel.Display(histogram);
+            _statusLabel.Text = "Showing Canny edge image and its histogram.";
+            _imageBox.Invalidate();
+        }
+        catch (Exception exception)
+        {
+            _statusLabel.Text = $"Unable to apply the Canny filter: {exception.Message}";
+        }
+        finally
+        {
+            newCannyFiltered?.Dispose();
+        }
+    }
+
     private void SetViewMode(ImageViewMode mode, bool isGrayscale)
     {
         _currentMode = mode;
@@ -447,6 +491,7 @@ public sealed class MainForm : Form
             mode is ImageViewMode.Original
                  or ImageViewMode.Grayscale;
         _gaussianFilterButton.Enabled = _boxFilterButton.Enabled;
+        _cannyFilterButton.Enabled = _boxFilterButton.Enabled;
         _laplaceFilterButton.Enabled =
             _imageBox.Image is not null &&
             mode is ImageViewMode.Original
@@ -458,6 +503,8 @@ public sealed class MainForm : Form
     private void DisposeProcessedImages()
     {
         // Callers must detach these bitmaps from PictureBox.Image first.
+        _cannyFilteredImage?.Dispose();
+        _cannyFilteredImage = null;
         _laplaceFilteredImage?.Dispose();
         _laplaceFilteredImage = null;
         _gaussianFilteredImage?.Dispose();
